@@ -8,7 +8,11 @@ A lightweight system tray application that translates selected text using AI wit
   Your browser does not support the video tag.
 </video>
 
-## Build
+## Installation
+
+Download the latest `translate_tool.exe` from the [Releases](../../releases) page and run it. No installation required - just double-click the executable.
+
+## Build from Source
 
 ```bash
 cargo build --release

@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build Release
+      run: cargo build --release
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: target/release/translate_tool.exe
+        body: |
+          ## Installation
+
+          Download `translate_tool.exe` and run it. The application will appear in your system tray.
+
+          ## Usage
+
+          1. Select any text in any application
+          2. Press `Ctrl+Shift+Q` to translate
+          3. The translated text will replace your selection
+
+          Right-click the tray icon to configure settings.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
