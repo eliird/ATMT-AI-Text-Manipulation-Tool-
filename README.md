@@ -35,3 +35,7 @@ Right-click the tray icon and select "Edit Config" to customize:
 - `prompt` - Translation instruction (default: English ↔ Japanese)
 
 Configuration is saved to `%APPDATA%\translate\translate_tool\config.json`
+
+## Credits
+
+Icon from [Freepik](https://www.freepik.com)

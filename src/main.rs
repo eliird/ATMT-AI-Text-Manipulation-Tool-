@@ -11,7 +11,7 @@ use global_hotkey::{
 };
 use std::{thread, time::Duration};
 use tray_icon::{
-    TrayIcon, TrayIconBuilder,
+    Icon, TrayIcon, TrayIconBuilder,
     menu::{Menu, MenuEvent, MenuId, MenuItem},
 };
 use winit::application::ApplicationHandler;
@@ -234,10 +234,27 @@ fn main() {
     let quit_id = quit_item.id().clone();
     let config_id = config_item.id().clone();
 
+    // Load icon
+    let icon_bytes = include_bytes!("../translation.png");
+    let icon = Icon::from_rgba(
+        image::load_from_memory(icon_bytes)
+            .expect("Failed to load icon")
+            .into_rgba8()
+            .into_raw(),
+        image::load_from_memory(icon_bytes)
+            .expect("Failed to load icon")
+            .width(),
+        image::load_from_memory(icon_bytes)
+            .expect("Failed to load icon")
+            .height(),
+    )
+    .expect("Failed to create icon");
+
     // Create tray icon
     let tray_icon = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_tooltip("Translate Tool")
+        .with_icon(icon)
         .build()
         .unwrap();
 
