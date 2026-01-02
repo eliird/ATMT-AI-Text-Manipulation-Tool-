@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+arboard = "3.6.1"
+enigo = { version = "0.6.1", features = ["serde"] }
+global-hotkey = "0.7.0"
+tray-icon = "0.21.2"
+winit = "0.30.12"
