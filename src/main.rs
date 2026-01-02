@@ -75,11 +75,23 @@ impl ApplicationHandler for App {
                 println!("{}", text);
                 println!("--- Translating... ---");
 
+                // Show loading indicator
+                let _ = paste_text("...");
+
                 match translate_text(&text, &self.config) {
                     Some(translated) => {
                         println!("--- Translation ---");
                         println!("{}", translated);
                         println!("--- End ---");
+
+                        // Remove loading indicator and paste translation
+                        if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                            // Delete the "..." (3 backspaces)
+                            for _ in 0..3 {
+                                let _ = enigo.key(Key::Backspace, Direction::Click);
+                            }
+                            thread::sleep(Duration::from_millis(50));
+                        }
 
                         // Paste translation back
                         if let Err(e) = paste_text(&translated) {
@@ -88,6 +100,13 @@ impl ApplicationHandler for App {
                     }
                     None => {
                         println!("Translation failed");
+
+                        // Remove loading indicator
+                        if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                            for _ in 0..3 {
+                                let _ = enigo.key(Key::Backspace, Direction::Click);
+                            }
+                        }
                     }
                 }
             } else {
