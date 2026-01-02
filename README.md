@@ -2,6 +2,10 @@
 
 A lightweight system tray application that translates selected text using AI with a simple hotkey.
 
+## Demo
+
+![Demo](demo.mp4)
+
 ## Build
 
 ```bash
