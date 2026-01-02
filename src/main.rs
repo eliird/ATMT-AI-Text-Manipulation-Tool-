@@ -1,151 +1,171 @@
-use winit::event_loop::{ControlFlow, EventLoop, ActiveEventLoop};
-use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
-use winit::window::WindowId;
+ mod config;
 
-use tray_icon::{
-    menu::{Menu, MenuItem, MenuEvent, MenuId},
-    TrayIcon, TrayIconBuilder,
-};
+  use arboard::Clipboard;
+  use config::Config;
+  use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+  use global_hotkey::{
+      hotkey::{Code, HotKey, Modifiers},
+      GlobalHotKeyEvent, GlobalHotKeyManager,
+  };
+  use std::{thread, time::Duration};
+  use tray_icon::{
+      menu::{Menu, MenuEvent, MenuItem, MenuId},
+      TrayIcon, TrayIconBuilder,
+  };
+  use winit::application::ApplicationHandler;
+  use winit::event::WindowEvent;
+  use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+  use winit::window::WindowId;
 
-use global_hotkey::{
-    hotkey::{Code, HotKey, Modifiers},
-    GlobalHotKeyEvent, GlobalHotKeyManager,
-};
+  struct App {
+      tray_icon: Option<TrayIcon>,
+      quit_id: MenuId,
+      config_id: MenuId,
+      hotkey_manager: GlobalHotKeyManager,
+      config: Config,
+  }
 
+  impl App {
+      fn open_config(&self) {
+          // Ensure config file exists with defaults
+          if let Err(e) = self.config.save() {
+              println!("Failed to save config: {}", e);
+              return;
+          }
 
-use arboard::Clipboard;
-use enigo::{Enigo, Direction, Key, Keyboard, Settings};
-use std::{thread, time::Duration};
+          if let Some(path) = Config::config_path() {
+              println!("Opening config file: {:?}", path);
+              if let Err(e) = open::that(&path) {
+                  println!("Failed to open config: {}", e);
+              }
+          }
+      }
+  }
 
-struct App{
-    tray_icon: Option<TrayIcon>,
-    quit_id: MenuId,
-    hotkey_manager: GlobalHotKeyManager,
-}
+  impl ApplicationHandler for App {
+      fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
+          println!("Application resumed");
+      }
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
-        println!("Application resumed");
-    }
+      fn window_event(&mut self, _event_loop: &ActiveEventLoop, _id: WindowId, _event: WindowEvent) {
+          // No windows
+      }
 
-    fn window_event(
-            &mut self,
-            _event_loop: &ActiveEventLoop,
-            _id: WindowId,
-            _event: WindowEvent,
-        ) {
-        // No window events to handle
-    }
+      fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+          // Check for menu events
+          if let Ok(event) = MenuEvent::receiver().try_recv() {
+              if event.id == self.quit_id {
+                  println!("Quit clicked, exiting...");
+                  event_loop.exit();
+              } else if event.id == self.config_id {
+                  self.open_config();
+              }
+          }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        // check for menu events
-        if let Ok(event) = MenuEvent::receiver().try_recv(){
-            if event.id == self.quit_id {
-                println!("Quit menu item clicked. Exiting...");
-                event_loop.exit();
-            }
-        };
+          // Check for hotkey events
+          if let Ok(_event) = GlobalHotKeyEvent::receiver().try_recv() {
+              println!("Hotkey pressed! Capturing text...");
 
-        // check for the hotkey events
-        if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
-            println!("Hotkey event received: {:?}", event);
-            if let Some(text) = capture_text() {
-                println!("Captured text: {}", text);
-            } else {
-                println!("No text captured.");
-            }
-        }
-    }
-}
+              if let Some(text) = capture_text() {
+                  println!("--- Captured Text ---");
+                  println!("{}", text);
+                  println!("--- End ---");
+              } else {
+                  println!("No text captured");
+              }
+          }
+      }
+  }
 
-fn capture_text() -> Option<String>{
-    // Placeholder function for capturing text
-    println!("Capturing text...");
-    let mut clipboard = Clipboard::new().unwrap();
-    let mut enigo = Enigo::new(&Settings::default()).ok()?;
+  fn capture_text() -> Option<String> {
+      let mut clipboard = Clipboard::new().ok()?;
+      let mut enigo = Enigo::new(&Settings::default()).ok()?;
 
-    // Release any held modifier keys first
-    enigo.key(Key::Shift, Direction::Release).ok()?;
-    enigo.key(Key::Control, Direction::Release).ok()?;
-    enigo.key(Key::Alt, Direction::Release).ok()?;
-    
-    // get original clipboard content
-    let original = clipboard.get_text().unwrap_or_default();
+      // Release any held modifier keys first
+      enigo.key(Key::Shift, Direction::Release).ok()?;
+      enigo.key(Key::Control, Direction::Release).ok()?;
+      enigo.key(Key::Alt, Direction::Release).ok()?;
 
-    // small delay to ensure we dont interfere with hotkey release
-    thread::sleep(Duration::from_millis(150));
+      // Save original clipboard
+      let original = clipboard.get_text().unwrap_or_default();
 
-    // Simulate Ctrl+C to copy selected text
-    enigo.key(Key::Control, Direction::Press).ok()?;
-    enigo.key(Key::Unicode('c'), Direction::Click).ok()?;
-    enigo.key(Key::Control, Direction::Release).ok()?;
+      // Small delay to ensure we don't interfere with the hotkey release
+      thread::sleep(Duration::from_millis(50));
 
-    // wait for clipboard to update
-    thread::sleep(Duration::from_millis(100));
+      // Simulate Ctrl+C
+      enigo.key(Key::Control, Direction::Press).ok()?;
+      enigo.key(Key::Unicode('c'), Direction::Click).ok()?;
+      enigo.key(Key::Control, Direction::Release).ok()?;
 
-    // check new clipboard content
-    let new_text = clipboard.get_text().unwrap_or_default();
+      // Wait for clipboard to update
+      thread::sleep(Duration::from_millis(100));
 
-    if !new_text.is_empty() && new_text != original {
+      // Check clipboard
+      let new_text = clipboard.get_text().unwrap_or_default();
+
+      if !new_text.is_empty() && new_text != original {
           return Some(new_text);
-    }
+      }
 
-    // Release any held modifier keys first
-    enigo.key(Key::Shift, Direction::Release).ok()?;
-    enigo.key(Key::Control, Direction::Release).ok()?;
-    enigo.key(Key::Alt, Direction::Release).ok()?;
-    thread::sleep(Duration::from_millis(50));
-    
-    // Nothing selected - try Ctrl+A then Ctrl+C
-    enigo.key(Key::Control, Direction::Press).ok()?;
-    enigo.key(Key::Unicode('a'), Direction::Click).ok()?;
-    enigo.key(Key::Control, Direction::Release).ok()?;
+      // Nothing selected - release modifiers again and try Ctrl+A then Ctrl+C
+      enigo.key(Key::Shift, Direction::Release).ok()?;
+      enigo.key(Key::Control, Direction::Release).ok()?;
+      enigo.key(Key::Alt, Direction::Release).ok()?;
 
-    thread::sleep(Duration::from_millis(50));
+      thread::sleep(Duration::from_millis(50));
 
-    enigo.key(Key::Control, Direction::Press).ok()?;
-    enigo.key(Key::Unicode('c'), Direction::Click).ok()?;
-    enigo.key(Key::Control, Direction::Release).ok()?;
+      // Select all
+      enigo.key(Key::Control, Direction::Press).ok()?;
+      enigo.key(Key::Unicode('a'), Direction::Click).ok()?;
+      enigo.key(Key::Control, Direction::Release).ok()?;
 
-    thread::sleep(Duration::from_millis(100));
+      thread::sleep(Duration::from_millis(100));
 
-    clipboard.get_text().ok()
+      // Copy
+      enigo.key(Key::Control, Direction::Press).ok()?;
+      enigo.key(Key::Unicode('c'), Direction::Click).ok()?;
+      enigo.key(Key::Control, Direction::Release).ok()?;
 
-}
+      thread::sleep(Duration::from_millis(100));
 
-fn main() {
+      clipboard.get_text().ok()
+  }
 
-    let event_loop = EventLoop::new().unwrap();
-    // keep running until explicitly told to stop
-    event_loop.set_control_flow(ControlFlow::Wait);
+  fn main() {
+      let event_loop = EventLoop::new().unwrap();
+      event_loop.set_control_flow(ControlFlow::Wait);
 
-    //create a tray menu
-    let menu = Menu::new();
-    let quite_item = MenuItem::new("Quit", true, None);
-    menu.append(&quite_item).unwrap();
-    let quit_id = quite_item.id().clone();
+      // Create tray menu
+      let menu = Menu::new();
+      let config_item = MenuItem::new("Edit Config", true, None);
+      let quit_item = MenuItem::new("Quit", true, None);
+      menu.append(&config_item).unwrap();
+      menu.append(&quit_item).unwrap();
 
-    // create tray icon, empty for now
-    let tray_icon = TrayIconBuilder::new()
-        .with_menu(Box::new(menu))
-        .build()
-        .unwrap();
-    
-    // Register a global hotkey Ctrl+Shift+H
-    let hotkey_manager = GlobalHotKeyManager::new().unwrap();
-    let hotkey = HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyQ);
-    hotkey_manager.register(hotkey).unwrap();
+      let quit_id = quit_item.id().clone();
+      let config_id = config_item.id().clone();
 
-    println!("Tray icon created. right click to see the menu.");
-    
+      // Create tray icon
+      let tray_icon = TrayIconBuilder::new()
+          .with_menu(Box::new(menu))
+          .with_tooltip("Translate Tool")
+          .build()
+          .unwrap();
 
-    let mut app = App { 
-        tray_icon: Some(tray_icon),
-        quit_id: quit_id,
-        hotkey_manager: hotkey_manager,
-    };
-       // listen for menu events
-    println!("Event loop started. Press Ctrl+C to exit.");
-    event_loop.run_app(&mut app).unwrap();
-}
+      // Register global hotkey: Ctrl+Shift+Q
+      let hotkey_manager = GlobalHotKeyManager::new().unwrap();
+      let hotkey = HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyQ);
+      hotkey_manager.register(hotkey).unwrap();
+
+      println!("Tray icon created. Press Ctrl+Shift+Q to trigger.");
+
+      let mut app = App {
+          tray_icon: Some(tray_icon),
+          quit_id,
+          config_id,
+          hotkey_manager,
+          config: Config::load(),
+      };
+
+      event_loop.run_app(&mut app).unwrap();
+  }
