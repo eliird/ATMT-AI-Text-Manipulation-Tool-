@@ -1,21 +1,23 @@
  mod config;
 
-  use arboard::Clipboard;
-  use config::Config;
-  use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-  use global_hotkey::{
-      hotkey::{Code, HotKey, Modifiers},
-      GlobalHotKeyEvent, GlobalHotKeyManager,
-  };
-  use std::{thread, time::Duration};
-  use tray_icon::{
-      menu::{Menu, MenuEvent, MenuItem, MenuId},
-      TrayIcon, TrayIconBuilder,
-  };
-  use winit::application::ApplicationHandler;
-  use winit::event::WindowEvent;
-  use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-  use winit::window::WindowId;
+use arboard::Clipboard;
+use config::Config;
+use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use global_hotkey::{
+    hotkey::{Code, HotKey, Modifiers},
+    GlobalHotKeyEvent, GlobalHotKeyManager,
+};
+use std::{thread, time::Duration};
+use tray_icon::{
+    menu::{Menu, MenuEvent, MenuItem, MenuId},
+    TrayIcon, TrayIconBuilder,
+};
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::window::WindowId;
+
+use reqwest::blocking::Client as HttpClient;
 
   struct App {
       tray_icon: Option<TrayIcon>,
@@ -69,7 +71,18 @@
               if let Some(text) = capture_text() {
                   println!("--- Captured Text ---");
                   println!("{}", text);
-                  println!("--- End ---");
+                  println!("--- Translating... ---");
+
+                  match translate_text(&text, &self.config) {
+                      Some(translated) => {
+                          println!("--- Translation ---");
+                          println!("{}", translated);
+                          println!("--- End ---");
+                      }
+                      None => {
+                          println!("Translation failed");
+                      }
+                  }
               } else {
                   println!("No text captured");
               }
@@ -77,6 +90,41 @@
       }
   }
 
+
+  fn translate_text(text: &str, config: &Config) -> Option<String> {
+      let client = HttpClient::new();
+
+      let full_prompt = format!("{}\n\n{}", config.prompt, text);
+
+      let body = serde_json::json!({
+          "model": config.model,
+          "messages": [
+              {
+                  "role": "user",
+                  "content": full_prompt
+              }
+          ]
+      });
+
+      let mut request = client
+          .post(format!("{}/chat/completions", config.api_url))
+          .header("Content-Type", "application/json")
+          .json(&body);
+
+      // Only add auth header if api_key is not empty
+      if !config.api_key.is_empty() {
+          request = request.header("Authorization", format!("Bearer {}", config.api_key));
+      }
+
+      let response = request.send().ok()?;
+      let json: serde_json::Value = response.json().ok()?;
+
+      json["choices"][0]["message"]["content"]
+          .as_str()
+          .map(|s| s.to_string())
+  }
+
+  
   fn capture_text() -> Option<String> {
       let mut clipboard = Clipboard::new().ok()?;
       let mut enigo = Enigo::new(&Settings::default()).ok()?;
