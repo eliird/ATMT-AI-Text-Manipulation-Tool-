@@ -4,7 +4,9 @@ A lightweight system tray application that translates selected text using AI wit
 
 ## Demo
 
-![Demo](demo.mp4)
+<video src="demo.mp4" width="100%" controls>
+  Your browser does not support the video tag.
+</video>
 
 ## Build
 
