@@ -13,6 +13,11 @@ use global_hotkey::{
     GlobalHotKeyEvent, GlobalHotKeyManager,
 };
 
+
+use arboard::Clipboard;
+use enigo::{Enigo, Direction, Key, Keyboard, Settings};
+use std::{thread, time::Duration};
+
 struct App{
     tray_icon: Option<TrayIcon>,
     quit_id: MenuId,
@@ -45,9 +50,70 @@ impl ApplicationHandler for App {
         // check for the hotkey events
         if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
             println!("Hotkey event received: {:?}", event);
+            if let Some(text) = capture_text() {
+                println!("Captured text: {}", text);
+            } else {
+                println!("No text captured.");
+            }
         }
     }
 }
+
+fn capture_text() -> Option<String>{
+    // Placeholder function for capturing text
+    println!("Capturing text...");
+    let mut clipboard = Clipboard::new().unwrap();
+    let mut enigo = Enigo::new(&Settings::default()).ok()?;
+
+    // Release any held modifier keys first
+    enigo.key(Key::Shift, Direction::Release).ok()?;
+    enigo.key(Key::Control, Direction::Release).ok()?;
+    enigo.key(Key::Alt, Direction::Release).ok()?;
+    
+    // get original clipboard content
+    let original = clipboard.get_text().unwrap_or_default();
+
+    // small delay to ensure we dont interfere with hotkey release
+    thread::sleep(Duration::from_millis(150));
+
+    // Simulate Ctrl+C to copy selected text
+    enigo.key(Key::Control, Direction::Press).ok()?;
+    enigo.key(Key::Unicode('c'), Direction::Click).ok()?;
+    enigo.key(Key::Control, Direction::Release).ok()?;
+
+    // wait for clipboard to update
+    thread::sleep(Duration::from_millis(100));
+
+    // check new clipboard content
+    let new_text = clipboard.get_text().unwrap_or_default();
+
+    if !new_text.is_empty() && new_text != original {
+          return Some(new_text);
+    }
+
+    // Release any held modifier keys first
+    enigo.key(Key::Shift, Direction::Release).ok()?;
+    enigo.key(Key::Control, Direction::Release).ok()?;
+    enigo.key(Key::Alt, Direction::Release).ok()?;
+    thread::sleep(Duration::from_millis(50));
+    
+    // Nothing selected - try Ctrl+A then Ctrl+C
+    enigo.key(Key::Control, Direction::Press).ok()?;
+    enigo.key(Key::Unicode('a'), Direction::Click).ok()?;
+    enigo.key(Key::Control, Direction::Release).ok()?;
+
+    thread::sleep(Duration::from_millis(50));
+
+    enigo.key(Key::Control, Direction::Press).ok()?;
+    enigo.key(Key::Unicode('c'), Direction::Click).ok()?;
+    enigo.key(Key::Control, Direction::Release).ok()?;
+
+    thread::sleep(Duration::from_millis(100));
+
+    clipboard.get_text().ok()
+
+}
+
 fn main() {
 
     let event_loop = EventLoop::new().unwrap();
@@ -68,7 +134,7 @@ fn main() {
     
     // Register a global hotkey Ctrl+Shift+H
     let hotkey_manager = GlobalHotKeyManager::new().unwrap();
-    let hotkey = HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyH);
+    let hotkey = HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyQ);
     hotkey_manager.register(hotkey).unwrap();
 
     println!("Tray icon created. right click to see the menu.");
